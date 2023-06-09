@@ -153,7 +153,7 @@ class ActiveConnection:
                 or type(type_) is not str  # pylint: disable=unidiomatic-typecheck
             )
         ):
-            self.logger.error("Received invalid command", msg)
+            self.logger.error("Received invalid command: %s", msg)
             self.send_message(
                 messages.error_message(
                     msg.get("id"),
@@ -172,7 +172,7 @@ class ActiveConnection:
             return
 
         if not (handler_schema := self.handlers.get(type_)):
-            self.logger.info(f"Received unknown command: {type_}")
+            self.logger.info("Received unknown command: %s", type_)
             self.send_message(
                 messages.error_message(
                     cur_id, const.ERR_UNKNOWN_COMMAND, "Unknown command."
