@@ -378,9 +378,8 @@ class Entity(ABC):
             return self.entity_description.has_entity_name
         return False
 
-    def _device_class_name(self) -> str | None:
+    def _device_class_name(self, component_translations: dict[str, Any]) -> str | None:
         """Return a translated name of the entity based on its device class."""
-        assert self.platform
         if not self.has_entity_name:
             return None
         device_class_key = self.device_class or "_"
@@ -388,7 +387,7 @@ class Entity(ABC):
             f"component.{self.platform.domain}.entity_component."
             f"{device_class_key}.name"
         )
-        return self.platform.component_translations.get(name_translation_key)
+        return component_translations.get(name_translation_key)
 
     def _default_to_device_class_name(self) -> bool:
         """Return True if an unnamed entity should be named by its device class."""
@@ -403,50 +402,57 @@ class Entity(ABC):
             f".{self.translation_key}.name"
         )
 
-    @property
-    def suggested_object_id(self) -> str | None:
-        """Return input for object id."""
-        if (
-            hasattr(self, "_attr_name")
-            or self.translation_key is None
-            or not self.has_entity_name
-        ):
-            # Return self.name also if self._attr_name is set, because some integrations
-            # use self.name for other purposes than the entity name
-            return self.name
-
-        assert self.platform
-        name_translation_key = (
-            f"component.{self.platform.platform_name}.entity.{self.platform.domain}"
-            f".{self.translation_key}.name"
-        )
-        if name_translation_key not in self.platform.object_id_platform_translations:
-            return self.name
-        name: str = self.platform.object_id_platform_translations[name_translation_key]
-        return name
-
-    @property
-    def name(self) -> str | UndefinedType | None:
+    def _name_internal(
+        self,
+        component_translations: dict[str, Any],
+        platform_translations: dict[str, Any],
+    ) -> str | UndefinedType | None:
         """Return the name of the entity."""
         if hasattr(self, "_attr_name"):
             return self._attr_name
         if self.has_entity_name and (
             name_translation_key := self._name_translation_key()
         ):
-            if name_translation_key in self.platform.platform_translations:
-                name: str = self.platform.platform_translations[name_translation_key]
+            if name_translation_key in platform_translations:
+                name: str = platform_translations[name_translation_key]
                 return name
         if hasattr(self, "entity_description"):
             description_name = self.entity_description.name
             if description_name is UNDEFINED and self._default_to_device_class_name():
-                return self._device_class_name()
+                return self._device_class_name(component_translations)
             return description_name
 
         # The entity has no name set by _attr_name, translation_key or entity_description
         # Check if the entity should be named by its device class
         if self._default_to_device_class_name():
-            return self._device_class_name()
+            return self._device_class_name(component_translations)
         return UNDEFINED
+
+    @property
+    def suggested_object_id(self) -> str | None:
+        """Return input for object id."""
+        # The check for self.platform guards against integrations not using an
+        # EntityComponent and can be removed in HA Core 2024.1
+        # mypy doesn't know about fget: https://github.com/python/mypy/issues/6185
+        if self.__class__.name.fget is Entity.name.fget and self.platform:  # type: ignore[attr-defined]
+            name = self._name_internal(
+                self.platform.object_id_component_translations,
+                self.platform.object_id_platform_translations,
+            )
+        else:
+            name = self.name
+        return None if name is UNDEFINED else name
+
+    @property
+    def name(self) -> str | UndefinedType | None:
+        """Return the name of the entity."""
+        # The check for self.platform guards against integrations not using an
+        # EntityComponent and can be removed in HA Core 2024.1
+        if not self.platform:
+            return self._name_internal({}, {})
+        return self._name_internal(
+            self.platform.component_translations, self.platform.platform_translations
+        )
 
     @property
     def state(self) -> StateType:
