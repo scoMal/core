@@ -744,6 +744,7 @@ async def test_execute_times_out(
 
         turn_on_wait.set()
         await hass.async_block_till_done()
+        await hass.async_block_till_done()
         # The remaining two calls should now have executed
         assert call_service_mock.call_count == 4
         expected_calls.extend(
@@ -1054,6 +1055,8 @@ async def test_device_class_switch(
     )
     sensor.hass = hass
     sensor.entity_id = "switch.demo_sensor"
+    sensor._attr_device_info = None
+    sensor._attr_name = "Demo Sensor"
     sensor.async_write_ha_state()
 
     result = await sh.async_handle_message(
