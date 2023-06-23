@@ -42,12 +42,12 @@ from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.template import Template
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.template_entity import (
     CONF_AVAILABILITY,
     CONF_PICTURE,
     ManualTriggerEntity,
 )
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .const import CONF_COLUMN_NAME, CONF_QUERY, DOMAIN
 from .models import SQLData
@@ -84,7 +84,7 @@ async def async_setup_platform(
     if value_template is not None:
         value_template.hass = hass
 
-    trigger_entity_config = {CONF_NAME: name}
+    trigger_entity_config = {CONF_NAME: name, CONF_DEVICE_CLASS: device_class}
     if availability:
         trigger_entity_config[CONF_AVAILABILITY] = availability
     if icon:
@@ -102,7 +102,6 @@ async def async_setup_platform(
         unique_id,
         db_url,
         True,
-        device_class,
         state_class,
         async_add_entities,
     )
@@ -143,7 +142,6 @@ async def async_setup_entry(
         entry.entry_id,
         db_url,
         False,
-        None,
         None,
         async_add_entities,
     )
@@ -189,7 +187,6 @@ async def async_setup_sensor(
     unique_id: str | None,
     db_url: str,
     yaml: bool,
-    device_class: SensorDeviceClass | None,
     state_class: SensorStateClass | None,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -272,7 +269,6 @@ async def async_setup_sensor(
                 value_template,
                 unique_id,
                 yaml,
-                device_class,
                 state_class,
                 use_database_executor,
             )
@@ -326,7 +322,6 @@ class SQLSensor(ManualTriggerEntity, SensorEntity):
         value_template: Template | None,
         unique_id: str | None,
         yaml: bool,
-        device_class: SensorDeviceClass | None,
         state_class: SensorStateClass | None,
         use_database_executor: bool,
     ) -> None:
@@ -335,7 +330,6 @@ class SQLSensor(ManualTriggerEntity, SensorEntity):
         self._query = query
         self._attr_name = trigger_entity_config[CONF_NAME].template if yaml else None
         self._attr_native_unit_of_measurement = unit
-        self._attr_device_class = device_class
         self._attr_state_class = state_class
         self._template = value_template
         self._column_name = column
@@ -352,6 +346,16 @@ class SQLSensor(ManualTriggerEntity, SensorEntity):
                 manufacturer="SQL",
                 name=trigger_entity_config[CONF_NAME].template,
             )
+
+    async def async_added_to_hass(self) -> None:
+        """Call when entity about to be added to hass."""
+        await super().async_added_to_hass()
+        await self.async_update()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra attributes."""
+        return dict(self._attr_extra_state_attributes)
 
     async def async_update(self) -> None:
         """Retrieve sensor data from the query using the right executor."""
@@ -403,5 +407,3 @@ class SQLSensor(ManualTriggerEntity, SensorEntity):
 
         sess.close()
         return data
-
-        # self.async_write_ha_state()
